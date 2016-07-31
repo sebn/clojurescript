@@ -1037,6 +1037,7 @@
              (let [{:keys [target optimizations]} (get @env/*compiler* :options)]
                ;; we only load foreign libraries under optimizations :none
                (when (= :none optimizations)
+                 (comment "TODO: gjs")
                  (if (= :nodejs target)
                    ;; under node.js we load foreign libs globally
                    (let [{:keys [js-dependency-index options]} @env/*compiler*

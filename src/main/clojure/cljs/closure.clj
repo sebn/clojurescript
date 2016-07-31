@@ -312,9 +312,11 @@
                       u))
         add-target (fn [ext]
                      (cons (io/resource "cljs/externs.js")
-                       (if (= :nodejs target)
-                         (cons (io/resource "cljs/nodejs_externs.js")
-                           (or ext []))
+                       (case target
+                         :nodejs (cons (io/resource "cljs/nodejs_externs.js")
+                                   (or ext []))
+                         :gjs (cons (io/resource "cljs/gjs_externs.js")
+                                (or ext []))
                          ext)))
         load-js (fn [ext]
                   (map #(js-source-file (.getFile %) (slurp %)) ext))]
@@ -939,6 +941,8 @@
 (defn make-preamble [{:keys [target preamble hashbang]}]
   (str (when (and (= :nodejs target) (not (false? hashbang)))
          (str "#!" (or hashbang "/usr/bin/env node") "\n"))
+       (when (and (= :gjs target) (not (false? hashbang)))
+         (str "#!" (or hashbang "/usr/bin/env gjs") "\n"))
        (when preamble (preamble-from-paths preamble))))
 
 (comment
@@ -1420,6 +1424,15 @@
                (apply str (preloads (:preloads opts)))
                "goog.require(\"" (comp/munge (:main opts)) "\");\n"
                "goog.require(\"cljs.nodejscli\");\n")))
+      :gjs
+      (output-one-file opts
+        (add-header opts
+          (str "var _gjsBootstrap = imports.goog.bootstrap.gjs;\n"
+               "var _cljsDeps = imports.cljs_deps;\n"
+               "goog.global.CLOSURE_UNCOMPILED_DEFINES = " closure-defines ";\n"
+               (apply str (preloads (:preloads opts)))
+               "goog.require(\"" (comp/munge (:main opts)) "\");\n"
+               "goog.require(\"cljs.gjscli\");\n")))
       (output-one-file opts
         (str "var CLOSURE_UNCOMPILED_DEFINES = " closure-defines ";\n"
              "if(typeof goog == \"undefined\") document.write('<script src=\"" asset-path "/goog/base.js\"></script>');\n"
@@ -1853,6 +1866,8 @@
   (assert (not (and (= target :nodejs) (= optimizations :whitespace)))
     (format ":nodejs target not compatible with :whitespace optimizations")))
 
+; TODO: check-gjs-target
+
 (defn foreign-source? [js]
   (and (satisfies? deps/IJavaScript js)
        (deps/-foreign? js)))
@@ -1985,11 +2000,13 @@
                                 (compile-sources compiler-stats compile-opts)
                                 (#(map add-core-macros-if-cljs-js %))
                                 (add-js-sources all-opts)
-                                (cond-> (= :nodejs (:target all-opts)) (concat [(-compile (io/resource "cljs/nodejs.cljs") all-opts)]))
+                                (cond-> (= :nodejs (:target all-opts)) (concat [(-compile (io/resource "cljs/nodejs.cljs") all-opts)])
+                                        (= :gjs (:target all-opts)) (concat [(-compile (io/resource "cljs/gjs.cljs") all-opts)]))
                                 deps/dependency-order
                                 (add-preloads all-opts)
                                 add-goog-base
-                                (cond-> (= :nodejs (:target all-opts)) (concat [(-compile (io/resource "cljs/nodejscli.cljs") all-opts)])))
+                                (cond-> (= :nodejs (:target all-opts)) (concat [(-compile (io/resource "cljs/nodejscli.cljs") all-opts)])
+                                        (= :gjs (:target all-opts)) (concat [(-compile (io/resource "cljs/gjscli.cljs") all-opts)])))
                  _ (when (:emit-constants all-opts)
                      (comp/emit-constants-table-to-file
                        (::ana/constant-table @env/*compiler*)
@@ -2029,6 +2046,13 @@
                                "goog" "bootstrap" "nodejs.js")]
                  (util/mkdirs outfile)
                  (spit outfile (slurp (io/resource "cljs/bootstrap_node.js")))))
+             ;; FIXME: emit GJS bootstrap script for :none & :whitespace optimizations
+             (when (and (= (:target opts) :gjs)
+                        (not= (:optimizations opts) :whitespace))
+               (let [outfile (io/file (util/output-directory opts)
+                               "goog" "bootstrap" "gjs.js")]
+                 (util/mkdirs outfile)
+                 (spit outfile (slurp (io/resource "cljs/bootstrap_gjs.js")))))
              ret))))))
 
 (comment

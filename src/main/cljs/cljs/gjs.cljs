@@ -1,7 +1,8 @@
 ; Projects compiled with :target :gjs can 'import' this namespace
 ; to get the gjs globals loaded into cljs.gjs and get
 ; ClojureScript's 'print' set up correctly.
-(ns cljs.gjs)
+(ns cljs.gjs
+  (:refer-clojure :exclude [print]))
 
 (def print (js/print))
 (def printerr (js/printerr))

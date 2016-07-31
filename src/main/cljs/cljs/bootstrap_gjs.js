@@ -3,7 +3,7 @@
  */
 var CLJS_ROOT = ".";
 
-window.goog = {}
+window.goog = {};
 
 window.CLOSURE_IMPORT_SCRIPT = function(src) {
   var mod = imports;

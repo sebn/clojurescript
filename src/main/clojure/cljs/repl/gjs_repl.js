@@ -8,14 +8,20 @@ try {
     let srv = new Gio.SocketService();
     srv.add_inet_port(PORT, null);
 
-    srv.connect("incoming", function(connection) {
+    srv.connect("incoming", function(srv, connection) {
+        print("Incoming connection\n");
+        print(connection);
+        print(connection.get_input_stream());
         let input = new Gio.DataInputStream({base_stream: connection.get_input_stream()}),
             output = new Gio.DataOutputStream({base_stream: connection.get_output_stream()}),
             ret = null,
             err = null;
 
-        input.read_until_async("\0", Gio.Priority.HIGH_IDLE, null, function(input, async_read_result, user_data) {
+        input.read_until_async("\0", 0, null, function(input, async_read_result, user_data) {
+            print("Incoming data: ");
             let [data, length, read_error] = input.read_until_finish(async_read_result);
+            print(data);
+            print("\n");
 
             if(read_error) {
                 printerr(read_error.message, "\n");
@@ -51,12 +57,13 @@ try {
             output.put_string("\0");
         }, null);
 
+        print("Disconnecting\n");
         return true;
     });
 
     srv.start();
-    print("ClojureScript GJS REPL server listening on", PORT);
-    let loop = new GLib.MainLoop(new GLib.MainContext(), false);
+    print("ClojureScript GJS REPL server listening on port", PORT);
+    let loop = new GLib.MainLoop(null, false);
     loop.run();
 
 } catch(err) {
